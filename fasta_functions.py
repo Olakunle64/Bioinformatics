@@ -27,7 +27,7 @@ def find_all_minimum_seq(seq_dict):
     min_value = min(values)
     for key, value in new_dict.items():
         if value == min_value:
-            minimum_values[key] = seq_dict.get(key)
+            minimum_values[key] = [seq_dict.get(key), len(seq_dict.get(key))]
     
     return minimum_values
 
@@ -45,7 +45,7 @@ def find_all_maximum_seq(seq_dict):
     max_value = max(values)
     for key, value in new_dict.items():
         if value == max_value:
-            maximum_values[key] = seq_dict.get(key)
+            maximum_values[key] = [seq_dict.get(key), len(seq_dict.get(key))]
     
     return maximum_values
 
@@ -62,7 +62,8 @@ def get_sequence(filename):
         lines = f.readlines()
         for line in lines:
             if line.startswith(">"):
-                identifier = line.strip('\n')
+                identifier = line.strip('\n').split()[0].lstrip(">")
+                # print(identifier)
                 seq_dict[identifier] = ""
                 # print(line)
                 continue
@@ -81,53 +82,62 @@ def find_maximum_values(my_dict):
             maximums[key] = my_dict.get(key)
     return maximums
 
-def longest_orf(filename):
-    """find the longest ORF in a fasta file"""
-    seq_dict = get_sequence("dna.example.fasta")
-    length_of_orfs = {}
-    for identifier, sequence, in seq_dict.items():
-        start_codon = {}
-        stop_codon = {}
-        index = 0
-        while index < len(sequence):
-            if sequence[index: index + 3] == "ATG":
+def longest_orf(filename, frame=0):
+    """Find the longest ORF in a fasta file for the specified reading frame."""
+    seq_dict = get_sequence(filename)  # Assumes this function reads the fasta file
+    longest_orf_info = {"identifier": None, "start": None, "length": 0}
+    
+    for identifier, sequence in seq_dict.items():
+        index = frame  # Start at the specified frame
+        while index < len(sequence) - 2:  # Ensure we have full codons
+            if sequence[index:index + 3] == "ATG":  # Start codon found
                 index_of_start_codon = index
                 index += 3
-                j = index
-                while j < len(sequence):
-                    if sequence[j: j + 3] in ["TAA", "TAG", "TGA"]:
-                        index_of_stop_codon = j
-                        length_of_orfs[identifier] = len(sequence[index_of_start_codon:index_of_stop_codon + 3])
-                        index += 3
-                        break
-                    j += 1
-            index += 1
-    print("all ORF in the fasta file", length_of_orfs)
-    return find_maximum_values(length_of_orfs)
+                while index < len(sequence) - 2:
+                    codon = sequence[index:index + 3]
+                    if codon in ["TAA", "TAG", "TGA"]:  # Stop codon found
+                        index_of_stop_codon = index
+                        orf_length = index_of_stop_codon - index_of_start_codon + 3
+                        if orf_length > longest_orf_info["length"]:
+                            longest_orf_info = {
+                                "identifier": identifier,
+                                "start": index_of_start_codon,
+                                "length": orf_length
+                            }
+                        break  # Exit the inner loop to find the next start codon
+                    index += 3  # Continue looking for stop codons
+            index += 1  # Continue searching for start codons
+    
+    return longest_orf_info  # Return the longest ORF's info
 
 def get_longest_orf_of_sequence(identifier, filename):
-    """find the longest of sequence that belongs to identifier"""
+    """Find the longest ORF (Open Reading Frame) of the sequence that belongs to the identifier."""
     seq_dict = get_sequence(filename)
     length_of_orfs = []
-    maximum_orfs = {}
-    index = 0
-    if not seq_dict.get(identifier):
+    
+    if identifier not in seq_dict:
         return 0
-    sequence = seq_dict.get(identifier)
+    
+    sequence = seq_dict[identifier]
+    index = 0
+    
     while index < len(sequence):
-        if sequence[index: index + 3] == "ATG":
+        if sequence[index:index + 3] == "ATG":
             index_of_start_codon = index
             index += 3
-            j = index
-            while j < len(sequence):
-                if sequence[j: j + 3] in ["TAA", "TAG", "TGA"]:
-                    index_of_stop_codon = j
-                    length_of_orfs.append(len(sequence[index_of_start_codon:index_of_stop_codon + 3]))
-                    index += 3
-                    break
-                j += 1
-        index += 1
-    return max(length_of_orfs)
+            
+            while index < len(sequence):
+                if sequence[index:index + 3] in ["TAA", "TAG", "TGA"]:
+                    index_of_stop_codon = index
+                    length_of_orfs.append(index_of_stop_codon - index_of_start_codon + 3)
+                    index = index + 3  # Move past the stop codon
+                    break  # Exit the inner loop to find the next start codon
+                index += 3  # Move to the next codon (3 bases)
+        else:
+            index += 1  # Move to the next base if not a start codon
+            
+    return max(length_of_orfs) if length_of_orfs else 0
+
 
 
 def repeated_substring(n, filename):
@@ -135,8 +145,9 @@ def repeated_substring(n, filename):
     seq_dict = get_sequence(filename)
     reads = seq_dict.values()
     dict_track = {}
-    index = 0
+    
     for read in reads:
+        index = 0
         while index < len(read):
             sub_string = read[index: index + n]
             if len(sub_string) != n:
@@ -150,4 +161,3 @@ def repeated_substring(n, filename):
             index += 1
     print("Most frequent repeat", find_maximum_values(dict_track))
     return dict_track
-
